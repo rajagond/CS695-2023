@@ -108,13 +108,13 @@ sudo insmod lkm4.ko pid=37958 virt_addr=0xffff600000000045 ; sudo rmmod lkm4 ; s
 ------- Below results are generated on some other time ------ so different time stamp ---------------------
 ```
 
-![lkm4p1](/home/raja/Desktop/Spring-2023/CS695-2023/190050096-cs695-a2/image/lkm4p1.png)
+![lkm4p1](./image/lkm4p1.png)
 
 
 
-![lkm4p2](/home/raja/Desktop/Spring-2023/CS695-2023/190050096-cs695-a2/image/lkm4p2.png)
+![lkm4p2](./image/lkm4p2.png)
 
-![lkm4p3](/home/raja/Desktop/Spring-2023/CS695-2023/190050096-cs695-a2/image/lkm4p3.png)
+![lkm4p3](./image/lkm4p3.png)
 
 Find task_struct using **pid_task(find_vpid(pid), PIDTYPE_PID)**. I have use module_param to take pid and virt_addr as command line argument. Then used standard page walk method (using pgd, p4d, pud, pmd and pte) to calculate physical address. More details can be found in the lkm4.c
 
@@ -171,12 +171,12 @@ Find task_struct using **pid_task(find_vpid(pid), PIDTYPE_PID)**. I have use mod
 
 I run a process random_heap_access.o in which I allocated heap and then I inserted lkm5.ko. 
 
-![lkm5p1](/home/raja/Desktop/Spring-2023/CS695-2023/190050096-cs695-a2/image/lkm5p1.png)
+![lkm5p1](./image/lkm5p1.png)
 
-![lkm5p1](/home/raja/Desktop/Spring-2023/CS695-2023/190050096-cs695-a2/image/lkm5p3.png)
+![lkm5p1](./image/lkm5p3.png)
 
 After I clicked enter page was accessed and more physical pages found but vm pages remain same. This shows that Linux has Lazy allocation.
 
-![lkm5p1](/home/raja/Desktop/Spring-2023/CS695-2023/190050096-cs695-a2/image/lkm5p2.png)
+![lkm5p1](./image/lkm5p2.png)
 
-![lkm5p1](/home/raja/Desktop/Spring-2023/CS695-2023/190050096-cs695-a2/image/lkm5p4.png)
+![lkm5p1](./image/lkm5p4.png)
