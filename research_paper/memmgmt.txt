@@ -1,0 +1,241 @@
+-----------------------------------------------------------------------
+Memory Resource Management in VMware ESX Server
+-----------------------------------------------------------------------
+*Abstract*
++ Unmodified operating system
++ Ballooning technique reclaims pages considered to be least useful by 
+    guest OS
++ what is overcommit Memory?
+  -- Memory overcommitment is a concept in computing that covers the 
+     assignment of more memory to virtual computing devices (or processes)
+    than the physical machine they are hosted, or running on actually has.
+
+*Introduction*
++ server consolidation
+  -- Server consolidation is the process of combining multiple servers 
+     into a single physical server. The goal of server consolidation is
+     to reduce the number of physical servers required to run an 
+     application or set of applications.
++ Proliferation - the rapid increase (prasaar)
++ resurgence - the return or growth of something that had stopped.
++ Virtual Machine - illusion of separate physical machine that is 
+    protected and isolated
++ Many small servers can be consolidated onto fewer large servers to 
+    simplify management and reduce costs.
++ statistical multiplexing - the process of sharing a single resource 
+    among multiple users or processes.
++ Virtual machines have been used for decades to allow multiple copies 
+    of potentially different operating systems to run concurrently on a
+    single hardware platform
++ VMware ESX Server is a thin software layer designed to multiplex 
+  hardware resources efficiently among virtual machines.
++ VMware ESX Server is a type 1 hypervisor, which means that it runs 
+  directly on the hardware and is not dependent on any other operating
+  system. ESX Server manages system hardware directly, providing 
+  significantly higher I/O performance and complete control over resource
+  management. (Full Virtualization)
++ a background activity exploits opportunities to share identical pages 
+  between VMs, reducing overall memory pressure on the system
+
+*Memory Virtualization*
++ A guest operating system that executes within a virtual machine expects a zero-based 
+  physical address space(i.e starting from zero), as provided by real hardware.
++ ESX Server maintains a pmap data structure for each VM to translate “physical” page
+ numbers (PPNs) to machine page numbers (MPNs).
++ Separate shadow page tables, which contain virtual-to-machine page mappings, are maintained
+ for use by the processor and are kept consistent with the physical-to-machine page mappings
+    in the pmap data structure.
++ The server can remap a “physical” page by changing its PPN-to-MPN mapping, in a manner
+  that is completely transparent to the VM.
+
+*Reclaimation Mechanism*
++ Overcommitment means that the total size configured for all running virtual machines 
+  exceeds the total amount of actual machine memory
++ Since commodity operating systems do not yet support dynamic changes to physical 
+  memory sizes, this size remains constant after booting a guest OS.
+
+**Page Replacement Issues**
++ The standard approach used by earlier virtual machine systems is to introduce another
+  level of paging, moving some VM "physical" pages to a swap area on disk.
++ Unfortunately, an extra level of paging requires a meta-level page replacement policy:
+  the virtual machine system must choose not only the VM from which to revoke memory, 
+  but also which of its particular pages to reclaim.
++ a meta-level page replacement policy must make relatively uninformed resource management
+ decisions, why? Because it has no knowledge of the actual memory usage patterns of the
+ guest operating systems. Because of this limited information, a meta-level page 
+ replacement policy must make relatively uninformed resource management decisions. 
+ These decisions may not be optimal for every individual page or process, but they are
+ designed to provide the best overall performance for the system as a whole.
++ What is double paging problem?
+  -- Double paging is a problem that occurs when a virtual machine system uses a meta-level
+     page replacement policy to reclaim memory from a guest operating system. The problem
+     occurs when the guest OS is using a page that is not currently mapped into the guest
+     OS's page tables. In this case, the guest OS will not be able to access the page, and
+     the virtual machine system will not be able to reclaim it. This situation is called
+     a "double page fault" because the guest OS will fault on the first page fault, and
+     the virtual machine system will fault on the second page fault.
+**Ballooning**
++ Ballooning is a technique that allows a guest OS to reclaim pages considered to be 
+  least useful by the guest OS.(solution to double paging problem)
++ coaxing - to persuade someone to do something by using gentle or friendly methods.
++ A small balloon module(LKM) is loaded into the guest OS as a pseudo-device driver
+  or kernel service.(No external interface within the guest OS. communicate with the host
+  OS through a private channel)
++ inflate when server is under memory pressure, deflate when server is not under memory
+  pressure(deallocate previously-allocated pages).
++ The balloon driver communicates the physical page number for each allocated page to ESX 
+  Server, which may then reclaim the corresponding machine page.
++ When a guest PPN is ballooned, the system annotates its pmap entry and deallocates the
+  associated MPN.
++ Hot-pluggable memory cards would enable an additional form of coarse-grained ballooning.
+  What is hot-pluggable memory cards?
+  -- Hot-pluggable memory cards are memory modules that can be added or removed from a 
+     computer system while the system is running. Hot-pluggable memory cards are also 
+     known as hot-swap memory cards.
++ What is cache coloring?
+  -- cache coloring (also known as page coloring) is the process of attempting to allocate
+   free pages that are contiguous from the CPU cache's point of view, in order to maximize
+   the total number of pages cached by the processor.
++ synthetic benchmark - a benchmark that is designed to test a specific aspect of a 
+  computer system, rather than a real-world application.
++ Disadvantages of ballooning
+  - upper bounds on reasonable balloon sizes may be imposed by various guest OS limitations.
+  - The balloon driver may be uninstalled, disabled explicitly, unavailable while a guest 
+    OS is booting, or temporarily unable to reclaim memory quickly enough to satisfy current
+    system demands.
+
+**Demand Paging**
++ When ballooning is not possible or insufficient, the system falls back to a paging 
+  mechanism. Memory is reclaimed by paging out to an ESX Server swap area on disk, without
+  any guest involvement.
++ A randomized page replacement policy is used to prevent the types of pathological 
+  interference with native guest OS memory management algorithms
+
+*Sharing Memory*
++ higher levels of overcommitment can be achieved by sharing identical pages between 
+  virtual machines efficiently.
++ guest OSs can share common application code and data, reducing the total amount of 
+  memory required to run multiple VMs.
+
+**Transparent Page Sharing**
++ Disco paper introduces this term as a method for eliminating redundant copies of pages,
+  such as code or read-only data, across virtual machines.
++ Writing to a shared page causes a fault that generates a private copy.
+
+**Content based page sharing**
++ Constraint
+  - Modification to guest OS internals are not possible in ESX environment.
+  - Changes to application programming interface(APIs) are not acceptable.
++ Basic Idea: Identify page copies by their contents, regardless of where, when and by 
+  whom they were generated. Page with identical contents can be shared.
++ Two key advantages
+  - eleminates the need of modify, hook or even understand the guest OS code.
+  - More opportunities for sharing, all potentially sharable pages can be identified
+    by their contents.
++ Cost is high for comparison of all pages in the system.
+  - O(n^2) time complexity 
+  - Hashing is used to identify pages with potentially-identical contents efficiently.
+  - if hash values are identical, the full comparison is performed.
+  - copy on write, reclaimed redundant pages.
+
+**Implementation**
++ A single global hash table contains frames for all scanned pages, and chaining is used
+  to handle collisions.
++ A shared frame consists of a hash value, the machine page number (MPN) for the shared 
+  page, a reference count, and a link for chaining.
++ The current ESX Server page sharing implementation scans guest pages randomly.
++ Configuration options control maximum per-VM and system-wide page scanning rates.
+  (For zero CPU overhead)
++ What is zero pages?
+  -- Zero page is a page filled with zeros. You can make a mapping to this page and get
+     wide zeroed virtual region.
++ Page sharing does improve memory locality, and may therefore increase hit rates in
+  physically-indexed caches.
++ These experiments demonstrate that ESX Server is able to exploit sharing 
+  opportunities effectively.
+
+*Shares vs. Working Sets*
++ What is working set in VM?
+  --  a virtual machine's working set size is defined as the amount of guest 
+    physical memory that is actively being used.
++ ESX Server employs a new allocation algorithm that is able to achieve efficient
+  memory utilization while maintaining memory performance isolation guarantees.
+
+**Share Based Allocation**
++ Shares are alternatively referred to as tickets or weights in the literature. 
+  The term clients is used to abstractly refer to entities such as threads, 
+  processes, VMs, users, or groups.
++ A client is entitled to consume resources proportional to its share allocation;
+  it is guaranteed a minimum resource fraction equal to its fraction of the total
+  shares in the system.
++ The shares-per-page ratio can be interpreted as a price; revocation reallocates
+  memory away from clients paying a lower price to those willing to pay a higher 
+  price.
+
+**Reclaiming Idle Memory**
++ A significant limitation of pure proportional-share algorithms is that they do 
+  not incorporate any information about active memory usage or working sets.
++ active client with fewer share -- suffer from memory pressure while idle client 
+  with more share can hoard memory unproductively.
++ ESX Server resolves this problem by introducing an "idle memory tax".
++ The basic idea is to charge a client more for an idle page than for one it is 
+  actively using. When memory is scarce, pages will be reclaimed preferentially from
+  clients that are not actively using their full allocations.
+
+rho = Share(S) / (Pages(P) (f + k(1-f))
+f = fraction of pages in use
+k = 1 / (1 - tou) 
+
+**Measuring Idle Memory**
++ For the idle memory tax to be effective, the server needs an efficient mechanism to 
+  estimate the fraction of memory in active use by each virtual machine.
++ Guest OS monitoring typically relies on access bits associated with page table 
+  entries, which are bypassed by DMA for device I/O.
++ ESX Server uses a statistical sampling approach to obtain aggregate VM working set
+  estimates directly, without any guest involvement.
++ minor page faults?
+ -- A minor page fault occurs when a page is not in memory, but is present in the swap 
+    space (or some other paging file on disk). The page is brought into memory and the 
+    process continues as if nothing had happened.
++ major page faults?
+  -- A major page fault occurs when a page is not in memory and is not present in the 
+      swap space. In this case, the operating system must load the page from disk into 
+      memory. This is called a demand-paged page fault.
+
+*Allocation Policies*
+
+**Parameters**
++ System administrators use three basic parameters to control the allocation of memory
+  to each VM: a min size, a max size, and memory shares.
+  - min size: the minimum amount of memory that a VM is guaranteed to have available.
+              even when memory is overcommitted.
+  - max size: the maximum amount of memory that a VM can consume. Unless memory is 
+              overcommitted, VMs will be allocated their max size.
+  - shares: Memory shares entitle a VM to a fraction of physical memory, based on a
+             proportional-share allocation policy.
+
+**Admission Control**
++ An admission control policy ensures that sufficient unreserved memory and server swap
+  space is available before a VM is allowed to power on.
++ Machine memory must be reserved for the guaranteed min size, as well as additional 
+  overhead memory required for virtualization, for a total of min + overhead.
++ Disk swap space must be reserved for the remaining VM memory; i.e. max min.
++ Memory reservations are used for admission control, actual memory allocations vary 
+  dynamically, and unused reservations are not wasted.
+
+**Dynamic Reallocation**
++ Most operating systems attempt to maintain a minimum amount of free memory.
++ ESX Server employs a similar approach, but uses four thresholds to reflect different
+  reclamation states: high, soft, hard, and low, which default to 6%, 4%, 2%, and 1% 
+  of system memory, respectively.
+
+*I/O page Remmaping*
++ ESX Server maintains statistics to track “hot” pages in high memory that are involved
+  in repeated I/O operations. For example, a software cache of physical-to-machine page 
+  mappings (PPN-to-MPN) associated with network transmits is augmented to count the num-
+  ber of times each page has been copied.
++ When the count exceeds a specified threshold, the page is transparently remapped into
+  low memory. 
++ This scheme has proved very effective with guest operating systems that use a limited 
+  number of pages as network buffers. For some network-intensive workloads, the number 
+  of pages copied is reduced by several orders of magnitude

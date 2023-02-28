@@ -1,0 +1,28 @@
+---------------------------------------------------------------------------------------
+Sandpiper: Black-box and gray-box resource management for virtual machines
+---------------------------------------------------------------------------------------
+*Introduction*
++ Sandpiper implements a hotspot detection algorithm that determines 
+    - when to resize or migrate virtual machines, and a hotspot mitigation algorithm that
+      determines 
+    - what and where to migrate 
+    - and how many resources to allocate.
++ Our results show that Sandpiper imposes negligible overheads and that gray-box statistics
+  enable Sandpiper to make better migration decisions when alleviating memory hotspots.
+
+*Background and system overview*
++ Xen - Paravirtualized hypervisor
++ Sandpiper runs a component called the "nucleus" on each physical server; the nucleus runs
+  inside a special virtual server (domain-0 in Xen) and is responsible for gathering resource
+  usage statistics on that server.
++ For gray-box approaches, it implements a daemon within each virtual server to gather 
+  OS-level statistics and perhaps application logs.
++ The nuclei periodically relay these statistics to the Sandpiper control plane.
++ The control plane runs on a distinguished node and implements much of the intelligence in
+  Sandpiper. It comprises three components: 
+    - a proﬁling engine, 
+    - a hotspot detector and 
+    - a migration and resizing manager
++ Informally, a hotspot is said to have occurred if the aggregate usage of any resource 
+  (processor, network or memory) exceeds a threshold or if SLA violations occur for a
+   "sustained" period.

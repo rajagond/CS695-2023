@@ -1,0 +1,214 @@
+---------------------------------------------
+Live Migration of Virtual Machines
+---------------------------------------------
+*Abstract*
++ Live migration of virtual machines is a key feature of cloud computing. It allows a
+  clean separation between hardware and software, and facilitates fault management, 
+  load balancing, and low-level system maintenance.
++ OS migration built on top of the Xen VMM.
++ Interactive Loads means that the VM is running a GUI, and the user is interacting with
+  it. In this case, the VM is migrated by suspending it, copying its memory state to the
+  destination, and resuming it there.
+  -- Examples of interactive workloads in cloud computing could include web applications
+     that require real-time responses to user requests, video conferencing applications
+     that require low-latency communication between multiple users, or online gaming 
+     applications that require low latency and high processing power.
++ Writable working sets: written often and so should best be transferred via stop-and-
+  copy – we dub this set of pages the writable working set (WWS) of the operating system
+  by obvious extension of the original working set.
+
+**Introduction**
++ paravirtualization(i.e Xen) providing better use of physical resources, and better
+  isolation between virtual machines than full virtualization.
++ VM migration is easier as compared to process level migration.
++ In particular the narrow interface between a virtualized OS and the virtual machine
+  monitor (VMM) makes it easy avoid the problem of ‘residual dependencies’ in which the 
+  original host machine must remain available and network-accessible in order to service
+  -- residual dependencies
+    1. shared memory, wait()
+    2. OS state, tcp control blocks, fs state
+    3. isolated work
++ Metrics for evaluating migration
+  - Down time
+  - Migration time
+  - CPU overhead (source and destination)
+  - Network IO usage/requests
++ Load balancing
++ Maintenance of the physical machine
++ *PRE COPY* approach
+    - Pages of memory are iteratively copied from the source machine to the destination 
+      host, all without ever stopping the execution of the virtual machine being migrated.
+    - Page-level protection hardware is used to ensure a consistent snapshot is transferred,
+      and a rate-adaptive algorithm is used to control the impact of migration traffic on 
+      running services.
++ The final phase pauses the virtual machine, copies any remaining pages to the destination,
+  and resumes execution there.
++ eschews: abstain, delibrately avoid
++ Eschews "pull" approach because
+    - relatively poor performance
+    - requires the source machine to remain available and network-accessible in order to 
+      service requests from the destination machine for residual dependencies.
+
+*Related Work*
++ Zaps - Pods : Suspend - copied - resume
+*Design*
++ Providing live migration of VMs in a clustered server environment leads us to focus on
+  the physical resources used in such environments: specifically on memory, network and disk.
+**Migrating Memory**
++ When a VM is running a live service it is important that this transfer occurs in a manner 
+  that balances the requirements of 
+     - minimizing both downtime(service interruption - visible to clients) and
+     - total migration time
++ Migrating memory divided into three phases:
+    - Push phase
+        ~ source vm run as normal. Certain pages are pushed across network to new destination
+          vm. To ensure consistency, modified pages are resent.
+    - Stop and copy phase
+        ~ source vm is paused and all remaining pages are copied to destination vm. vm is 
+            resumed on destination.
+    - Pull phase
+        ~ The new VM executes and, if it accesses a page that has not yet been copied, this 
+            page is faulted in ("pulled") across the network from the source VM.
++ Most practical solution use one or two of these phases.
++ Pure stop-and-copy downtime and migration both are proportional to amount of physical memory.
++ Post Copy (pure demand-migration): short stop-and-copy phase, followed by a long pull phase.
+    - shorter downtime but much longer migration time.
++ PRE COPY:
+    - Iterative pre copy phase followed by a short stop-and-copy phase.
+    - By 'iterative' we mean that pre-copying occurs in rounds, in which the pages to be 
+      transferred during round n are those that are modified during round n − 1 (all pages
+      are transferred in the first round).
+    - Bound the number of rounds of pre-copying, based on analysis of the writable working set
+     (WWS) behavior of typical server workloads.
+
+**Local Resources**
++ Memory can be directly copied to the destination host.
++ Key Challenges:
+   - Device connected with the source physical machine, connections to local devices such as 
+     disks and network interfaces demand additional consideration.
++ Two Key problems
+    - Network resources
+        ~ We want a migrated OS to maintain all open network connections without relying on 
+        "forwarding mechanisms on the original host". A migrating VM will include all protocol
+         state (e.g. TCP PCBs), and will carry its IP address with it.
+        ~ The network interfaces of the source and destination machines typically exist on a 
+          single switched LAN.
+        ~ Our solution for managing migration with respect to network in this environment is
+         to generate an unsolicited "ARP reply"(proactively announce its own IP and MAC address,
+         without waiting for an ARP request.) from the "migrated host"(I think here migrated 
+         host refers to destination ), advertising that the IP has moved to a new location.
+        ~ small number of in-flight packets may lost.
+        ~ Some routers are configured not to accept broadcast ARP replies (in order to prevent 
+         IP spoofing), so an unsolicited ARP may not work in all scenarios.
+        ~ If the operating system is aware of the migration, it can opt to send directed replies
+          only to interfaces listed in its own ARP cache, to remove the need for a broadcast.
+        ~ Alternatively, on a switched network, the migrating OS can keep its original Ethernet 
+          MAC address, relying on the network switch to detect its move to a new port
+    - local devices
+        ~ Most modern data centers consolidate their storage requirements using a network-attached
+          storage (NAS) device, in preference to using local disks in individual servers.
+        ~ The problem of migrating local-disk storage is not addressed in this paper
+
+**Design Overview**
++ View the migration process as a transactional interaction between the two hosts involved:
+  - Stage 0: Pre-Migration
+        ~ Active VM on host A
+  - Stage 1: Reservation
+        ~ Initialize a container on the target host B
+  - Stage 2: Iterative Pre-Copy (Overhead due to copying)
+        ~ Enable shadow Paging
+        ~ Enable page-level protection
+        ~ Copy dirty pages in successive rounds
+  - Stage 3: Stop-and-Copy
+        ~ Suspend VM on host A
+        ~ Generate ARP to redirect traffic to Host B
+        ~ Synchronize all remaining VM state to Host B
+  - Stage 4: Commitment (stage 3 + stage 4: downtime)
+        ~ VM state on host A is released
+  - Stage 5: Activation
+        ~ VM starts on Host B
+        ~ Connects to local devices
+        ~ Resumes normal operation
+
+*Writable Working Set*
++ Pre-Copy Migration: The drawback is the wasted overhead of transferring memory pages that are 
+  subsequently modified, and hence must be transferred again
++ Clearly if the VM being migrated never modifies memory, a single pre-copy of each memory page will
+  suffice to transfer a consistent image to the destination. 
++ However, should the VM continuously "dirty pages faster than the rate of copying", then all pre-copy
+  work will be in vain and one should immediately stop and copy.
+
+**Measuring WWS**
++ All shadow page table are write protected.
++ To trace the writable working set behaviour of a number of representative workloads we used Xen’s 
+  shadow page tables to track dirtying statistics on all pages used by a particular executing OS.
++ Performing a migration of an operating system will give different results depending on the workload
+  and the precise moment at which migration begins
+
+*Implementation Issues*
++ Xen has a special management virtual machine used for the administration and control of the machine.
++ Two different methods:
+    - Managed Migration
+        ~ The management VM is responsible for the migration process, and the VM being migrated is 
+          unaware of the migration.
+    - Self-Migration
+        ~ Implemented almost entirely within the migratee OS with only a small stub required on the 
+          destination machine.
+
+**Managed Migration**
++ Managed migration is performed by migration daemons running in the management VMs of the source
+  and destination hosts. 
++ These are responsible for creating a new VM on the destination machine, and coordinating transfer
+  of live system state over the network.
++ Translation is very simple for dirty logging: 
+    - all page-table entries (PTEs) are initially read-only mappings in the shadow tables, regardless
+      of what is permitted by the guest tables. 
+    - If the guest tries to modify a page of memory, the resulting page fault is trapped by Xen. If 
+      write access is permitted by the relevant guest PTE then this permission is extended to the 
+      shadow PTE. At the same time, we set the appropriate bit in the VM’s dirty bitmap.
+
+**Self-Migration**
++ self-migration places the majority of the implementation within the OS being migrated. 
++ In this design no modifications are required either to Xen or to the management software running 
+  on the source machine, 
++ although a migration stub must run on the destination machine to listen for incoming migration requests.
++ Create an appropriate empty VM, and receive the migrated system state.
++ The major implementation difficulty of this scheme is to transfer a "consistent OS checkpoint".
++ In contrast with a managed migration, where we simply suspend the migratee to obtain a consistent checkpoint.
++ self migration is far harder because the OS must continue to run in order to transfer its final state.
++ We solve this difficulty by logically checkpointing the OS on entry to a final two-stage stop-and-copy phase. 
+    - The first stage disables all OS activity except for migration and then peforms a final scan of the dirty
+      bitmap, clearing the appropriate bit as each page is transferred. 
+    - Any pages that are dirtied during the final scan, and that are still marked as dirty in the bitmap, are
+      copied to a shadow buffer. 
+    - The second and final stage then transfers the contents of the shadow buffer — page updates are ignored
+      during this transfer.
+
+**Dynamic Rate-Limiting**
++ Extended downtime because the hottest pages in the writable working set are not amenable to pre-copy migration.
++ The downtime can be reduced by increasing the bandwidth limit, albeit at the cost of additional network
+  contention.
++ One solution: dynamically adapt the bandwidth limit during each pre-copying round.
+
+**Rapid Page Dirtying**
++ Author observed that page dirtying is often physically clustered — if a page is dirtied then it is 
+  disproportionally likely that a close neighbour will be dirtied soon after.
+
+**Paravirtualized Optimizations**
++ Stunning Rogue Processes.
++ Freeing Page Cache Pages
+ - When informed a migration is to begin, the OS can simply return some or all of these pages to Xen in
+   the same way it would when using the ballooning mechanism described in.
+ - However should the contents of these pages be needed again, they will need to be faulted back in from 
+   disk, incurring greater overall cost.
+
+*Evaluation*
++ Simple Web Server - small WWS - relatively easy case for live migration.
+
+*Conclusion*
++ By integrating live OS migration into the Xen virtual machine monitor authors enable rapid movement 
+  of interactive workloads within clusters and data centers.  
++ Dynamic network-bandwidth adaptation allows migration to proceed with minimal impact on running services,
+  while reducing total downtime to below discernable thresholds.
++ SPECweb99 can be migrated with just 210ms downtime, while a Quake3 game server is migrated with an imperceptible
+  60ms outage.
