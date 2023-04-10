@@ -1,0 +1,45 @@
+Running quota = 1000000
+Elapsed 15.777 s
+nr_periods 538
+nr_throttled 514
+throttled_time 2060654813314
+Running quota = 900000
+Elapsed 17.110 s
+nr_periods 555
+nr_throttled 531
+throttled_time 2130047763774
+Running quota = 800000
+Elapsed 19.028 s
+nr_periods 574
+nr_throttled 550
+throttled_time 2208978404487
+Running quota = 700000
+Elapsed 22.918 s
+nr_periods 597
+nr_throttled 573
+throttled_time 2304150878875
+Running quota = 600000
+Elapsed 27.157 s
+nr_periods 624
+nr_throttled 600
+throttled_time 2420519555690
+Running quota = 500000
+Elapsed 33.997 s
+nr_periods 658
+nr_throttled 634
+throttled_time 2568245905446
+Running quota = 400000
+Elapsed 22.860 s
+nr_periods 681
+nr_throttled 657
+throttled_time 2624505234890
+Running quota = 300000
+Elapsed 62.030 s
+nr_periods 743
+nr_throttled 719
+throttled_time 2899275896000
+Running quota = 200000
+Elapsed 109.832 s
+nr_periods 853
+nr_throttled 829
+throttled_time 3415476378974

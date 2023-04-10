@@ -1,0 +1,54 @@
+Running quota = 1000000
+PID: 5613
+Elapsed time: 7.6048 s
+nr_periods 77
+nr_throttled 73
+throttled_time 83237632221
+Running quota = 900000
+PID: 5751
+Elapsed time: 7.58266 s
+nr_periods 77
+nr_throttled 73
+throttled_time 83237632221
+Running quota = 800000
+PID: 5916
+Elapsed time: 7.51262 s
+nr_periods 77
+nr_throttled 73
+throttled_time 83237632221
+Running quota = 700000
+PID: 6080
+Elapsed time: 7.60232 s
+nr_periods 77
+nr_throttled 73
+throttled_time 83237632221
+Running quota = 600000
+PID: 6161
+Elapsed time: 7.70788 s
+nr_periods 77
+nr_throttled 73
+throttled_time 83237632221
+Running quota = 500000
+PID: 6325
+Elapsed time: 7.50499 s
+nr_periods 77
+nr_throttled 73
+throttled_time 83237632221
+Running quota = 400000
+PID: 6486
+Elapsed time: 7.55926 s
+nr_periods 77
+nr_throttled 73
+throttled_time 83237632221
+Running quota = 300000
+PID: 6724
+Elapsed time: 7.59455 s
+nr_periods 77
+nr_throttled 73
+throttled_time 83237632221
+Running quota = 200000
+PID: 6964
+Elapsed time: 7.56881 s
+nr_periods 77
+nr_throttled 73
+throttled_time 83237632221
